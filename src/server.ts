@@ -1,7 +1,7 @@
 import express from 'express';
 import mongoose, { ConnectOptions } from 'mongoose';
 import cors from 'cors';
-import bodyParser from 'body-parser';
+// import bodyParser from 'body-parser';
 import dotenv from 'dotenv';
 import routes from './router/routes';
 
@@ -15,8 +15,9 @@ dotenv.config();
 
 const app = express();
 
-app.use(cors);
-app.use(bodyParser);
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded());
 app.use(routes);
 
 const PORT = process.env.PORT || 5001;
