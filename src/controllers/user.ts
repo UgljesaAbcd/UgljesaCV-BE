@@ -14,45 +14,41 @@ export const checkUserToken = async (req: Request, res: Response) => {
 
 export const loginUser = async (req: Request, res: Response) => {
   const { password, email } = req.body;
-  const user: IUser = {
-    ...req.body
-  };
 
   const dbUser = await UserModel.findOne({ email });
   if (dbUser?.email) {
-    bcrypt
-      .hash(password, 10)
-      .then(hash => {
-        validateUser(hash);
-      })
-      .catch(err => {
-        res.status(REST_STATUS_CODES.INTERNAL_SERVER_ERROR).send(err);
-      });
+    const isValid = bcrypt.compareSync(password, dbUser.password);
 
-    function validateUser(hash: string) {
-      bcrypt
-        .compare(dbUser.password, hash)
-        .then(() => {
-          const token = jwt.sign(user, process.env.JWT_SECRET);
-          res.status(REST_STATUS_CODES.OK).json({
-            email: dbUser.email,
-            firstName: dbUser.firstName,
-            lastName: dbUser.lastName,
-            company: dbUser.company,
-            theme: dbUser.theme,
-            token: token
-          });
-        })
-        .catch(err => {
-          res.status(REST_STATUS_CODES.INTERNAL_SERVER_ERROR).json(err);
-        });
+    if (isValid) {
+      const user: IUser = {
+        ...req.body
+      };
+      const token = jwt.sign(
+        {
+          email: dbUser.email,
+          password
+        },
+        process.env.JWT_SECRET
+      );
+      res.status(REST_STATUS_CODES.OK).json({
+        email: dbUser.email,
+        firstName: dbUser.firstName,
+        lastName: dbUser.lastName,
+        company: dbUser.company,
+        theme: dbUser.theme,
+        token: token
+      });
+    } else {
+      return res.status(401).json({
+        error: 'Invalid password'
+      });
     }
   } else {
     res.status(REST_STATUS_CODES.NO_CONTENT).json({ err: 'User not found' });
   }
 };
 
-export const createUser = async (req: Request, res: Response) => {
+export const createUser = (req: Request, res: Response) => {
   const {
     password,
     email,
@@ -64,31 +60,33 @@ export const createUser = async (req: Request, res: Response) => {
     messages
   } = req.body;
 
-  bcrypt
-    .genSalt(10)
-    .then(salt => {
-      return bcrypt.hash(password, salt);
-    })
-    .then(hash => {
-      const user = {
+  const salt = bcrypt.genSaltSync(10);
+  // const salt = '$2b$10$NMN/vnk0ypMDUqDYM6lIH.';
+  const hash = bcrypt.hashSync(password, salt);
+  const user = {
+    email,
+    firstName,
+    lastName,
+    company,
+    activate,
+    theme,
+    messages,
+    password: hash
+  };
+  const newUser = new UserModel(user);
+  newUser
+    .save()
+    .then(createdUser => {
+      res.status(REST_STATUS_CODES.CREATED).json({
+        id: createdUser._id,
         email,
         firstName,
         lastName,
         company,
         activate,
-        theme,
-        messages,
-        password: hash
-      };
-      const newUser = new UserModel(user);
-      newUser
-        .save()
-        .then(createdUser => {
-          res.status(REST_STATUS_CODES.CREATED).json(createdUser);
-        })
-        .catch(err => {
-          res.status(REST_STATUS_CODES.INTERNAL_SERVER_ERROR).send(err);
-        });
+        theme: 'light',
+        messages: []
+      });
     })
     .catch(err => {
       res.status(REST_STATUS_CODES.INTERNAL_SERVER_ERROR).send(err);
